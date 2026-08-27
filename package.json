@@ -1,0 +1,1 @@
+{"name":"rooznegar","version":"1.0.0","private":true,"type":"module","scripts":{"build":"vite build","dev":"vite"},"dependencies":{"@supabase/supabase-js":"^2.49.4","vite":"^7.1.7"}}
