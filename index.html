@@ -43,7 +43,15 @@
           <label>تمرکز <output id="focusText">۵/۱۰</output><input id="focus" type="range" min="1" max="10" value="5"></label>
         </div>
         <label class="field"><span>خواب (ساعت)</span><input id="sleep" type="number" min="0" max="24" step="0.25" placeholder="مثلاً ۷.۵"></label>
+        <div class="metric-grid structured">
+          <label>کار عمیق (دقیقه)<input id="deep-work" type="number" min="0" step="15" placeholder="۹۰"></label>
+          <label>عادت‌های امروز<input id="habits" placeholder="ورزش، مطالعه، مدیتیشن"></label>
+        </div>
+        <label class="field"><span>ورزش / حرکت بدن</span><input id="workout" placeholder="مثلاً ۴۵ دقیقه باشگاه یا پیاده‌روی"></label>
+        <label class="field"><span>غذا و تغذیه</span><input id="nutrition" placeholder="مثلاً غذای خانگی، آب کافی، فست‌فود"></label>
         <label class="field"><span>هایلایت روز</span><textarea id="highlight" placeholder="امروز چه چیزی مهم بود؟"></textarea></label>
+        <label class="field"><span>افراد مهم امروز</span><input id="people" placeholder="نام‌ها را با ویرگول جدا کنید"></label>
+        <label class="field"><span>نقطهٔ عطف / دستاورد</span><input id="milestones" placeholder="اگر اتفاق مهمی افتاد، کوتاه بنویسید"></label>
 
         <div class="section-head"><h2>خط زندگی امروز</h2><button id="add-event" class="quiet">+ اتفاق</button></div>
         <p class="hint">هر اتفاق می‌تواند فکر، احساس و تأمل خودش را داشته باشد.</p>
@@ -55,13 +63,27 @@
           <textarea id="dump" placeholder="هرچه در ذهنتان هست…"></textarea>
           <div class="inline-actions"><button id="timer-toggle" class="quiet">شروع تایمر</button><button id="timer-reset" class="quiet">بازنشانی</button></div>
         </div>
+        <div class="prompt-card">
+          <div class="section-head"><h2>پرامپت ژورنال</h2><button id="new-prompt" class="quiet">پرسش دیگر</button></div>
+          <p id="prompt-question"></p>
+          <textarea id="prompt-answer" placeholder="هرقدر دوست دارید پاسخ دهید…"></textarea>
+        </div>
+        <div class="goal-link-card">
+          <h2>اقدام امروز برای یک هدف</h2>
+          <select id="day-goal"><option value="">امروز به هدفی وصل نمی‌کنم</option></select>
+          <input id="goal-action" placeholder="اقدام مشخص امروز چه بود؟">
+          <label>تغییر پیشرفت <output id="action-progress-text">۰٪</output><input id="action-progress" type="range" min="0" max="25" value="0"></label>
+        </div>
         <label class="field"><span>تأمل کلی / درس یا تنظیم بعدی</span><textarea id="lesson" placeholder="چه چیزی می‌خواهم با خودم ببرم؟"></textarea></label>
         <button id="save-day" class="primary">ذخیرهٔ روز</button><p id="day-status" class="status"></p>
       </section>
 
       <section class="panel" id="calendar">
         <h2>تقویم و روزهای گذشته</h2>
-        <p class="hint">نمایش تاریخ‌ها شمسی است؛ برای باز کردن هر روز، روی آن بزنید.</p>
+        <div class="calendar-head"><button id="calendar-prev" class="icon">‹</button><strong id="calendar-month"></strong><button id="calendar-next" class="icon">›</button></div>
+        <div class="calendar-weekdays"><span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span></div><div id="calendar-grid" class="calendar-grid"></div>
+        <div class="archive-filters"><input id="archive-search" placeholder="جست‌وجو در نوشته‌ها، افراد و رویدادها"><select id="archive-score"><option value="">همهٔ امتیازها</option><option value="low">روزهای کم‌امتیاز (۱–۴)</option><option value="high">روزهای پرامتیاز (۷–۱۰)</option></select></div>
+        <p class="hint">تقویم و عنوان روزها شمسی است؛ با جست‌وجو می‌توانید به خاطره برگردید.</p>
         <div id="calendar-list" class="history"></div>
       </section>
 
@@ -81,12 +103,13 @@
         <h2>روندهای واقعی</h2>
         <p class="hint">این نمودارها از روزهایی ساخته می‌شوند که ثبت کرده‌اید.</p>
         <div id="charts" class="charts"></div>
+        <div id="patterns" class="patterns"></div>
         <div id="insight-empty" class="empty">برای دیدن روندها، چند روز را ثبت کنید.</div>
       </section>
 
       <section class="panel" id="reviews">
         <h2>مرور ماهانه و سالانه</h2>
-        <div class="review-switch"><button class="review-kind active" data-kind="monthly">ماهانه</button><button class="review-kind" data-kind="yearly">سالانه</button></div>
+        <div class="review-switch"><button class="review-kind active" data-kind="weekly">هفتگی</button><button class="review-kind" data-kind="monthly">ماهانه</button><button class="review-kind" data-kind="yearly">سالانه</button></div>
         <div id="review-summary" class="review-summary"></div>
         <label class="field"><span>چه چیزی را حفظ می‌کنم؟</span><textarea id="review-keep"></textarea></label>
         <label class="field"><span>چه چیزی را تنظیم می‌کنم؟</span><textarea id="review-adjust"></textarea></label>

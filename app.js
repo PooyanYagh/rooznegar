@@ -1,117 +1,66 @@
 import { createClient } from '@supabase/supabase-js';
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
+const $ = (s) => document.querySelector(s); const $$ = (s) => [...document.querySelectorAll(s)];
 const sb = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
 const fa = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 const shortFa = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'short', day: 'numeric' });
-let entries = []; let reviewKind = 'monthly'; let timerId; let seconds = 300;
-const today = () => new Date().toISOString().slice(0, 10);
-const isoDate = (date) => date.toISOString().slice(0, 10);
-const parseIso = (date) => new Date(`${date}T12:00:00`);
-const setStatus = (id, msg) => { $(id).textContent = msg; };
-const formatFa = (number) => new Intl.NumberFormat('fa-IR').format(number);
-
-$('#date').value = today();
-$('#today-label').textContent = fa.format(new Date());
-
+const faParts = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'numeric', day: 'numeric' });
+const prompts = ['امروز چه چیزی بیش از همه در ذهنم مانده است؟', 'امروز برای چه چیزی سپاسگزارم؟', 'اگر به خودِ صبح امروز یک پیام بدهم، چه می‌گویم؟', 'امروز چه چیزی به من انرژی داد و چه چیزی آن را گرفت؟', 'یک تصمیم کوچک بهتر برای فردا چیست؟', 'امروز از چه چیزی یاد گرفتم؟'];
+let entries = [], goals = [], reviewKind = 'weekly', timerId, seconds = 300, promptIndex = 0, calendarCursor = new Date();
+const today = () => new Date().toISOString().slice(0, 10); const isoDate = (d) => d.toISOString().slice(0, 10); const parseIso = (d) => new Date(`${d}T12:00:00`);
+const digits = (value) => String(value).replace(/[۰-۹]/g, (x) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(x));
+const setStatus = (id, msg) => { $(id).textContent = msg; }; const formatFa = (n) => new Intl.NumberFormat('fa-IR').format(n);
+const terms = (text = '') => text.split(/[،,]/).map((x) => x.trim()).filter(Boolean);
+function jParts(date) { const raw = {}; faParts.formatToParts(date).forEach((p) => { if (p.type !== 'literal') raw[p.type] = +digits(p.value); }); return raw; }
 function cleanAuthUrl() { if (location.hash.includes('access_token') || location.hash.includes('error=')) history.replaceState(null, '', `${location.pathname}${location.search}`); }
-function showTab(name) { $$('.tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === name)); $$('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === name)); if (name === 'insights') renderCharts(); if (name === 'reviews') loadReview(); }
+function make(tag, className, text) { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; }
+function showTab(name) { $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name)); $$('.panel').forEach((p) => p.classList.toggle('active', p.id === name)); if (name === 'calendar') renderCalendar(); if (name === 'insights') renderInsights(); if (name === 'reviews') loadReview(); }
 function updateDateLabel() { $('#jalali-date').textContent = fa.format(parseIso($('#date').value)); }
 function updateMetricLabels() { ['score', 'mood', 'stress', 'focus'].forEach((name) => { $(`#${name}Text`).textContent = `${formatFa($(`#${name}`).value)}/۱۰`; }); }
-function words(value = '') { return value.split(/[،,]/).map((x) => x.trim()).filter(Boolean); }
-function make(tag, className, text) { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; }
-
-function addEvent(value = {}) {
-  const node = $('#event-template').content.firstElementChild.cloneNode(true);
-  node.querySelector('.event-time').value = value.event_time || value.time || '';
-  node.querySelector('.event-title').value = value.title || '';
-  node.querySelector('.event-thought').value = value.thoughts || '';
-  node.querySelector('.event-emotions').value = (value.emotions || []).join('، ');
-  node.querySelector('.event-reflection').value = value.reflection || '';
-  if (value.thoughts || value.reflection || (value.emotions || []).length) node.querySelector('details').open = true;
-  node.querySelector('.remove-event').onclick = () => node.remove();
-  $('#events').append(node);
-}
-
+function renderPrompt() { $('#prompt-question').textContent = prompts[promptIndex]; }
+function addEvent(value = {}) { const node = $('#event-template').content.firstElementChild.cloneNode(true); node.querySelector('.event-time').value = value.event_time || ''; node.querySelector('.event-title').value = value.title || ''; node.querySelector('.event-thought').value = value.thoughts || ''; node.querySelector('.event-emotions').value = (value.emotions || []).join('، '); node.querySelector('.event-reflection').value = value.reflection || ''; if (value.thoughts || value.reflection || (value.emotions || []).length) node.querySelector('details').open = true; node.querySelector('.remove-event').onclick = () => node.remove(); $('#events').append(node); }
 function setDay(entry) {
-  $('#highlight').value = entry?.highlight || '';
-  $('#dump').value = entry?.brain_dump || '';
-  $('#lesson').value = entry?.lesson || '';
+  $('#highlight').value = entry?.highlight || ''; $('#dump').value = entry?.brain_dump || ''; $('#lesson').value = entry?.lesson || ''; $('#prompt-answer').value = entry?.thoughts || '';
   ['score', 'mood', 'stress', 'focus'].forEach((name) => { $(`#${name}`).value = entry?.[name] || 5; });
-  $('#sleep').value = entry?.sleep_hours ?? '';
-  $('#events').innerHTML = '';
-  (entry?.journal_events || []).sort((a, b) => (a.event_time || '').localeCompare(b.event_time || '')).forEach(addEvent);
-  if (!$('#events').children.length) addEvent();
-  updateMetricLabels(); updateDateLabel();
+  $('#sleep').value = entry?.sleep_hours ?? ''; $('#deep-work').value = entry?.deep_work_minutes ?? ''; $('#workout').value = entry?.workout || ''; $('#nutrition').value = entry?.nutrition || ''; $('#habits').value = (entry?.habits || []).join('، '); $('#people').value = (entry?.entities || []).join('، '); $('#milestones').value = (entry?.milestones || []).join('، ');
+  $('#events').innerHTML = ''; (entry?.journal_events || []).sort((a, b) => (a.event_time || '').localeCompare(b.event_time || '')).forEach(addEvent); if (!$('#events').children.length) addEvent(); updateMetricLabels(); updateDateLabel();
 }
-
-async function loadEntries() {
-  const { data, error } = await sb.from('journal_entries').select('id,entry_date,jalali_date,highlight,score,mood,stress,focus,sleep_hours,brain_dump,lesson,journal_events(*)').order('entry_date', { ascending: false }).limit(366);
-  if (error) return setStatus('#day-status', 'دریافت داده‌ها ناموفق بود.');
-  entries = data || []; renderCalendar(); renderCharts();
-}
-async function loadDay() {
-  const { data, error } = await sb.from('journal_entries').select('*,journal_events(*)').eq('entry_date', $('#date').value).maybeSingle();
-  if (error) return setStatus('#day-status', 'دریافت نوشته با خطا روبه‌رو شد.');
-  setDay(data);
-}
+async function loadEntries() { const { data, error } = await sb.from('journal_entries').select('id,entry_date,jalali_date,highlight,thoughts,brain_dump,lesson,score,mood,stress,focus,sleep_hours,deep_work_minutes,workout,nutrition,habits,entities,milestones,journal_events(*)').order('entry_date', { ascending: false }).limit(366); if (error) return setStatus('#day-status', 'دریافت داده‌ها ناموفق بود.'); entries = data || []; renderCalendar(); renderInsights(); }
+async function loadDay() { const { data, error } = await sb.from('journal_entries').select('*,journal_events(*)').eq('entry_date', $('#date').value).maybeSingle(); if (error) return setStatus('#day-status', 'دریافت نوشته با خطا روبه‌رو شد.'); setDay(data); }
+async function syncGoalProgress(goalId) { const { data: goal } = await sb.from('goals').select('baseline_progress').eq('id', goalId).single(); const { data: actions } = await sb.from('goal_actions').select('progress_delta').eq('goal_id', goalId); const progress = Math.max(0, Math.min(100, Number(goal?.baseline_progress || 0) + (actions || []).reduce((sum, action) => sum + Number(action.progress_delta || 0), 0))); return sb.from('goals').update({ progress }).eq('id', goalId); }
+async function saveGoalAction(entryId) { const goalId = $('#day-goal').value; if (!goalId) return; await sb.from('goal_actions').delete().eq('entry_id', entryId); const body = $('#goal-action').value.trim(); const delta = +$('#action-progress').value; if (body || delta) { const { error } = await sb.from('goal_actions').insert({ goal_id: goalId, entry_id: entryId, action_date: $('#date').value, body: body || 'اقدام روزانه', progress_delta: delta }); if (error) throw error; await syncGoalProgress(goalId); } }
 async function saveDay() {
   const entryDate = $('#date').value;
-  const payload = { entry_date: entryDate, jalali_date: shortFa.format(parseIso(entryDate)), highlight: $('#highlight').value.trim(), brain_dump: $('#dump').value, lesson: $('#lesson').value, score: +$('#score').value, mood: +$('#mood').value, stress: +$('#stress').value, focus: +$('#focus').value, sleep_hours: $('#sleep').value ? +$('#sleep').value : null };
-  const { data, error } = await sb.from('journal_entries').upsert(payload, { onConflict: 'user_id,entry_date' }).select().single();
-  if (error) return setStatus('#day-status', error.message);
-  const events = $$('.event-card').map((node) => ({ entry_id: data.id, event_time: node.querySelector('.event-time').value || null, title: node.querySelector('.event-title').value.trim(), thoughts: node.querySelector('.event-thought').value.trim(), emotions: words(node.querySelector('.event-emotions').value), reflection: node.querySelector('.event-reflection').value.trim() })).filter((event) => event.title);
-  const deleted = await sb.from('journal_events').delete().eq('entry_id', data.id);
-  if (deleted.error) return setStatus('#day-status', deleted.error.message);
-  if (events.length) { const { error: eventError } = await sb.from('journal_events').insert(events); if (eventError) return setStatus('#day-status', eventError.message); }
-  setStatus('#day-status', 'روز شما با موفقیت ذخیره شد.'); await loadEntries(); await loadDay();
+  const payload = { entry_date: entryDate, jalali_date: shortFa.format(parseIso(entryDate)), highlight: $('#highlight').value.trim(), thoughts: $('#prompt-answer').value, brain_dump: $('#dump').value, lesson: $('#lesson').value, score: +$('#score').value, mood: +$('#mood').value, stress: +$('#stress').value, focus: +$('#focus').value, sleep_hours: $('#sleep').value ? +$('#sleep').value : null, deep_work_minutes: $('#deep-work').value ? +$('#deep-work').value : null, workout: $('#workout').value.trim(), nutrition: $('#nutrition').value.trim(), habits: terms($('#habits').value), entities: terms($('#people').value), milestones: terms($('#milestones').value) };
+  const { data, error } = await sb.from('journal_entries').upsert(payload, { onConflict: 'user_id,entry_date' }).select().single(); if (error) return setStatus('#day-status', error.message);
+  const events = $$('.event-card').map((node) => ({ entry_id: data.id, event_time: node.querySelector('.event-time').value || null, title: node.querySelector('.event-title').value.trim(), thoughts: node.querySelector('.event-thought').value.trim(), emotions: terms(node.querySelector('.event-emotions').value), reflection: node.querySelector('.event-reflection').value.trim() })).filter((event) => event.title);
+  const deleted = await sb.from('journal_events').delete().eq('entry_id', data.id); if (deleted.error) return setStatus('#day-status', deleted.error.message); if (events.length) { const { error: eventError } = await sb.from('journal_events').insert(events); if (eventError) return setStatus('#day-status', eventError.message); }
+  try { await saveGoalAction(data.id); } catch (goalError) { return setStatus('#day-status', `روز ذخیره شد؛ اقدام هدف نیاز به migration دارد: ${goalError.message}`); }
+  setStatus('#day-status', 'روز، عادت‌ها و اقدام هدف ذخیره شدند.'); await loadEntries(); await loadDay(); await loadGoals();
 }
-
-function renderCalendar() {
-  const host = $('#calendar-list'); host.innerHTML = '';
-  if (!entries.length) { host.append(make('div', 'empty', 'هنوز روزی ثبت نشده است.')); return; }
-  entries.forEach((entry) => { const item = make('article'); const title = make('b', null, entry.jalali_date || shortFa.format(parseIso(entry.entry_date))); const note = make('small', null, entry.highlight || 'بدون هایلایت'); item.append(title, document.createElement('br'), note); item.onclick = () => { $('#date').value = entry.entry_date; showTab('day'); loadDay(); }; host.append(item); });
+function entrySearchText(entry) { return [entry.highlight, entry.thoughts, entry.brain_dump, entry.lesson, entry.workout, entry.nutrition, ...(entry.entities || []), ...(entry.habits || []), ...(entry.milestones || []), ...(entry.journal_events || []).flatMap((e) => [e.title, e.thoughts, e.reflection, ...(e.emotions || [])])].filter(Boolean).join(' ').toLowerCase(); }
+function renderArchive() { const host = $('#calendar-list'); host.innerHTML = ''; const query = $('#archive-search').value.trim().toLowerCase(); const filter = $('#archive-score').value; const filtered = entries.filter((entry) => (!query || entrySearchText(entry).includes(query)) && (!filter || (filter === 'low' ? entry.score <= 4 : entry.score >= 7))); if (!filtered.length) { host.append(make('div', 'empty', 'نتیجه‌ای پیدا نشد.')); return; } filtered.forEach((entry) => { const item = make('article'); item.append(make('b', null, entry.jalali_date || shortFa.format(parseIso(entry.entry_date))), document.createElement('br'), make('small', null, entry.highlight || 'بدون هایلایت')); item.onclick = () => { $('#date').value = entry.entry_date; showTab('day'); loadDay(); }; host.append(item); }); }
+function jalaliMonthDates(cursor) { const current = jParts(cursor); let first = new Date(cursor); while (jParts(first).day !== 1) first.setDate(first.getDate() - 1); const result = []; const next = new Date(first); while (jParts(next).year === current.year && jParts(next).month === current.month) { result.push(new Date(next)); next.setDate(next.getDate() + 1); } return { current, first, dates: result }; }
+function renderCalendar() { const { current, first, dates } = jalaliMonthDates(calendarCursor); $('#calendar-month').textContent = shortFa.format(first).replace(/\s*۱$/, ''); const grid = $('#calendar-grid'); grid.innerHTML = ''; const offset = (first.getDay() + 1) % 7; for (let i = 0; i < offset; i += 1) grid.append(make('span', 'calendar-day blank')); const byDate = new Set(entries.map((entry) => entry.entry_date)); dates.forEach((date) => { const iso = isoDate(date); const button = make('button', `calendar-day${byDate.has(iso) ? ' has-entry' : ''}${iso === $('#date').value ? ' selected' : ''}`, formatFa(jParts(date).day)); button.onclick = () => { $('#date').value = iso; showTab('day'); loadDay(); }; grid.append(button); }); renderArchive(); }
+function metricChart(title, key, suffix = '/۱۰', scale = 10) { const values = entries.slice(0, 30).reverse().filter((entry) => entry[key] !== null && entry[key] !== undefined); if (!values.length) return null; const card = make('article', 'chart-card'); const head = make('div', 'chart-head'); head.append(make('b', null, title), make('span', null, `آخرین: ${formatFa(values.at(-1)[key])}${suffix}`)); const bars = make('div', 'bars'); values.forEach((entry) => { const bar = make('i', 'bar-col'); bar.style.height = `${Math.max(7, Math.min(100, Number(entry[key]) / scale * 100))}%`; bar.title = `${shortFa.format(parseIso(entry.entry_date))}: ${entry[key]}`; bars.append(bar); }); card.append(head, bars); return card; }
+function renderPatterns() { const host = $('#patterns'); host.innerHTML = ''; const low = entries.filter((entry) => entry.score <= 4); const high = entries.filter((entry) => entry.score >= 7); const avg = (list, key) => list.length ? list.reduce((sum, item) => sum + Number(item[key] || 0), 0) / list.length : null; if (low.length || high.length) { const card = make('article', 'pattern-card'); card.append(make('h3', null, 'مقایسهٔ روزهای کم‌ و پرامتیاز')); const grid = make('div', 'comparison'); const lowBox = make('div'); lowBox.textContent = `کم‌امتیاز: ${formatFa(low.length)} روز · خواب میانگین ${avg(low, 'sleep_hours')?.toFixed(1) || '—'} ساعت · کار عمیق ${formatFa(Math.round(avg(low, 'deep_work_minutes') || 0))} دقیقه`; const highBox = make('div'); highBox.textContent = `پرامتیاز: ${formatFa(high.length)} روز · خواب میانگین ${avg(high, 'sleep_hours')?.toFixed(1) || '—'} ساعت · کار عمیق ${formatFa(Math.round(avg(high, 'deep_work_minutes') || 0))} دقیقه`; grid.append(lowBox, highBox); card.append(grid); host.append(card); }
+  const people = {}, topics = {}, milestones = {}; entries.forEach((entry) => { (entry.entities || []).forEach((x) => { people[x] = (people[x] || 0) + 1; }); (entry.milestones || []).forEach((x) => { milestones[x] = (milestones[x] || 0) + 1; }); [entry.highlight, entry.lesson, ...(entry.journal_events || []).flatMap((e) => [e.title, ...(e.emotions || [])])].filter(Boolean).flatMap((x) => String(x).split(/[\s،,]+/)).filter((x) => x.length > 3).forEach((x) => { topics[x] = (topics[x] || 0) + 1; }); });
+  [['افراد پرتکرار', people], ['موضوع‌ها و احساس‌ها', topics], ['نقطه‌های عطف', milestones]].forEach(([title, map]) => { const names = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name]) => name); if (names.length) { const card = make('article', 'pattern-card'); card.append(make('h3', null, title)); const chips = make('div', 'topic-list'); names.forEach((name) => chips.append(make('span', 'chip', name))); card.append(chips); host.append(card); } });
 }
-
-function metricChart(title, key) {
-  const values = entries.slice(0, 30).reverse().filter((entry) => entry[key] !== null && entry[key] !== undefined);
-  if (!values.length) return null;
-  const card = make('article', 'chart-card'); const head = make('div', 'chart-head'); head.append(make('b', null, title), make('span', null, `آخرین: ${formatFa(values.at(-1)[key])}/۱۰`)); const bars = make('div', 'bars'); values.forEach((entry) => { const bar = make('i', 'bar-col'); bar.style.height = `${Math.max(7, Number(entry[key]) * 10)}%`; bar.title = `${shortFa.format(parseIso(entry.entry_date))}: ${entry[key]}`; bars.append(bar); }); card.append(head, bars); return card;
-}
-function renderCharts() {
-  const charts = $('#charts'); if (!charts) return; charts.innerHTML = '';
-  [['امتیاز روز', 'score'], ['حال', 'mood'], ['استرس', 'stress'], ['تمرکز', 'focus']].forEach(([label, key]) => { const chart = metricChart(label, key); if (chart) charts.append(chart); });
-  const sleep = entries.slice(0, 30).reverse().filter((entry) => entry.sleep_hours !== null);
-  if (sleep.length) { const card = make('article', 'chart-card'); const head = make('div', 'chart-head'); head.append(make('b', null, 'خواب'), make('span', null, `آخرین: ${formatFa(sleep.at(-1).sleep_hours)} ساعت`)); const bars = make('div', 'bars'); sleep.forEach((entry) => { const bar = make('i', 'bar-col'); bar.style.height = `${Math.max(7, Math.min(100, Number(entry.sleep_hours) / 12 * 100))}%`; bars.append(bar); }); card.append(head, bars); charts.append(card); }
-  $('#insight-empty').hidden = charts.children.length > 0;
-}
-
-function renderGoals(goals) {
-  const host = $('#goals-list'); host.innerHTML = '';
-  if (!goals.length) { host.append(make('div', 'empty', 'اولین هدف‌تان را اضافه کنید.')); return; }
-  goals.forEach((goal) => { const card = make('article', 'goal-card'); const title = make('h3', null, goal.title); const meta = make('div', 'goal-meta'); meta.append(make('span', null, goal.due_date ? `موعد: ${shortFa.format(parseIso(goal.due_date))}` : 'بدون موعد'), make('span', null, `${formatFa(goal.progress)}٪`)); const progress = make('div', 'progress'); const fill = make('i'); fill.style.width = `${goal.progress}%`; progress.append(fill); const why = make('p', 'hint', goal.why || 'چرایی ثبت نشده است.'); const action = make('div', 'goal-actions'); const input = document.createElement('input'); input.placeholder = 'اقدام امروز برای این هدف'; const button = make('button', 'quiet', 'ثبت اقدام'); button.onclick = async () => { if (!input.value.trim()) return; const { error } = await sb.from('goal_actions').insert({ goal_id: goal.id, action_date: today(), body: input.value.trim(), progress_delta: 0 }); if (error) return setStatus('#day-status', error.message); input.value = ''; setStatus('#day-status', 'اقدام هدف ثبت شد.'); }; action.append(input, button); card.append(title, meta, progress, why, action); host.append(card); });
-}
-async function loadGoals() { const { data, error } = await sb.from('goals').select('*').order('created_at', { ascending: false }); if (!error) renderGoals(data || []); }
-async function saveGoal(event) { event.preventDefault(); const payload = { title: $('#goal-title').value.trim(), why: $('#goal-why').value.trim(), due_date: $('#goal-due').value || null, progress: +$('#goal-progress').value }; const { error } = await sb.from('goals').insert(payload); if (error) return setStatus('#day-status', error.message); event.target.reset(); $('#goal-progress-text').textContent = '۰٪'; event.target.hidden = true; await loadGoals(); }
-
-function period() { const now = new Date(); if (reviewKind === 'yearly') return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` }; const start = new Date(now.getFullYear(), now.getMonth(), 1); const end = new Date(now.getFullYear(), now.getMonth() + 1, 0); return { start: isoDate(start), end: isoDate(end) }; }
-function termsInCurrentPeriod() { const { start, end } = period(); const relevant = entries.filter((entry) => entry.entry_date >= start && entry.entry_date <= end); const pool = relevant.flatMap((entry) => [entry.highlight, entry.lesson, ...(entry.journal_events || []).flatMap((event) => [event.title, ...(event.emotions || [])])].filter(Boolean)); const counts = {}; pool.flatMap((value) => String(value).split(/\s|،|,/)).filter((word) => word.length > 3).forEach((word) => { counts[word] = (counts[word] || 0) + 1; }); return { relevant, top: Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([word]) => word) }; }
-async function loadReview() { const { start, end } = period(); const { relevant, top } = termsInCurrentPeriod(); const host = $('#review-summary'); host.innerHTML = ''; host.append(make('p', null, `${formatFa(relevant.length)} روز ثبت‌شده در این بازه.`)); const label = make('b', null, 'موضوع‌ها و احساس‌های پرتکرار'); const chips = make('div', 'topic-list'); (top.length ? top : ['با ثبت روزهای بیشتر، الگوها ظاهر می‌شوند']).forEach((word) => chips.append(make('span', 'chip', word))); host.append(label, chips); const { data } = await sb.from('journal_reviews').select('*').eq('period_start', start).eq('period_kind', reviewKind).maybeSingle(); $('#review-keep').value = data?.keep || ''; $('#review-adjust').value = data?.adjust || ''; }
+function renderInsights() { const charts = $('#charts'); if (!charts) return; charts.innerHTML = ''; [['امتیاز روز', 'score', '/۱۰', 10], ['حال', 'mood', '/۱۰', 10], ['استرس', 'stress', '/۱۰', 10], ['تمرکز', 'focus', '/۱۰', 10], ['خواب', 'sleep_hours', ' ساعت', 12], ['کار عمیق', 'deep_work_minutes', ' دقیقه', 360]].forEach((args) => { const chart = metricChart(...args); if (chart) charts.append(chart); }); $('#insight-empty').hidden = charts.children.length > 0; renderPatterns(); }
+function fillGoalSelect() { const current = $('#day-goal').value; $('#day-goal').innerHTML = '<option value="">امروز به هدفی وصل نمی‌کنم</option>'; goals.forEach((goal) => { const option = document.createElement('option'); option.value = goal.id; option.textContent = `${goal.title} — ${formatFa(goal.progress)}٪`; $('#day-goal').append(option); }); $('#day-goal').value = current; }
+function renderGoals() { const host = $('#goals-list'); host.innerHTML = ''; fillGoalSelect(); if (!goals.length) { host.append(make('div', 'empty', 'اولین هدف‌تان را اضافه کنید.')); return; } goals.forEach((goal) => { const card = make('article', 'goal-card'); card.append(make('h3', null, goal.title)); const meta = make('div', 'goal-meta'); meta.append(make('span', null, goal.due_date ? `موعد: ${shortFa.format(parseIso(goal.due_date))}` : 'بدون موعد'), make('span', null, `${formatFa(goal.progress)}٪`)); const progress = make('div', 'progress'); const fill = make('i'); fill.style.width = `${goal.progress}%`; progress.append(fill); card.append(meta, progress, make('p', 'hint', goal.why || 'چرایی ثبت نشده است.')); host.append(card); }); }
+async function loadGoals() { const { data, error } = await sb.from('goals').select('*').order('created_at', { ascending: false }); if (!error) { goals = data || []; renderGoals(); } }
+async function saveGoal(event) { event.preventDefault(); const base = +$('#goal-progress').value; const payload = { title: $('#goal-title').value.trim(), why: $('#goal-why').value.trim(), due_date: $('#goal-due').value || null, progress: base, baseline_progress: base }; const { error } = await sb.from('goals').insert(payload); if (error) return setStatus('#day-status', error.message); event.target.reset(); $('#goal-progress-text').textContent = '۰٪'; event.target.hidden = true; await loadGoals(); }
+function period() { const now = new Date(); if (reviewKind === 'yearly') return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` }; if (reviewKind === 'monthly') { const start = new Date(now.getFullYear(), now.getMonth(), 1); return { start: isoDate(start), end: isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)) }; } const day = new Date(now); const saturdayOffset = (day.getDay() + 1) % 7; day.setDate(day.getDate() - saturdayOffset); return { start: isoDate(day), end: isoDate(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 6)) }; }
+async function loadReview() { const { start, end } = period(); const relevant = entries.filter((entry) => entry.entry_date >= start && entry.entry_date <= end); const low = [...relevant].sort((a, b) => a.score - b.score).at(0); const high = [...relevant].sort((a, b) => b.score - a.score).at(0); const host = $('#review-summary'); host.innerHTML = ''; host.append(make('p', null, `${formatFa(relevant.length)} روز ثبت‌شده در این بازه.`)); if (low && high) { const compare = make('div', 'comparison'); compare.append(make('div', null, `کمترین امتیاز: ${formatFa(low.score)}/۱۰ — ${shortFa.format(parseIso(low.entry_date))} — ${low.highlight || 'بدون هایلایت'}`), make('div', null, `بیشترین امتیاز: ${formatFa(high.score)}/۱۰ — ${shortFa.format(parseIso(high.entry_date))} — ${high.highlight || 'بدون هایلایت'}`)); host.append(compare); } const { data } = await sb.from('journal_reviews').select('*').eq('period_start', start).eq('period_kind', reviewKind).maybeSingle(); $('#review-keep').value = data?.keep || ''; $('#review-adjust').value = data?.adjust || ''; }
 async function saveReview() { const { start, end } = period(); const { error } = await sb.from('journal_reviews').upsert({ period_start: start, period_end: end, period_kind: reviewKind, keep: $('#review-keep').value, adjust: $('#review-adjust').value }, { onConflict: 'user_id,period_start,period_kind' }); setStatus('#review-status', error ? error.message : 'مرور ذخیره شد.'); }
-
 function renderTimer() { const min = String(Math.floor(seconds / 60)).padStart(2, '0'); const sec = String(seconds % 60).padStart(2, '0'); $('#timer').textContent = `${formatFa(min)}:${formatFa(sec)}`; }
 function toggleTimer() { if (timerId) { clearInterval(timerId); timerId = null; $('#timer-toggle').textContent = 'ادامه'; return; } $('#timer-toggle').textContent = 'توقف'; timerId = setInterval(() => { if (seconds <= 0) { clearInterval(timerId); timerId = null; $('#timer-toggle').textContent = 'شروع تایمر'; return; } seconds -= 1; renderTimer(); }, 1000); }
-
-$$('.tab').forEach((button) => button.onclick = () => showTab(button.dataset.tab));
-['score', 'mood', 'stress', 'focus'].forEach((name) => { $(`#${name}`).oninput = updateMetricLabels; });
-$('#previous-day').onclick = () => { const date = parseIso($('#date').value); date.setDate(date.getDate() - 1); $('#date').value = isoDate(date); loadDay(); };
-$('#next-day').onclick = () => { const date = parseIso($('#date').value); date.setDate(date.getDate() + 1); $('#date').value = isoDate(date); loadDay(); };
-$('#date').onchange = loadDay; $('#add-event').onclick = () => addEvent(); $('#save-day').onclick = saveDay;
-$('#timer-toggle').onclick = toggleTimer; $('#timer-reset').onclick = () => { clearInterval(timerId); timerId = null; seconds = 300; renderTimer(); $('#timer-toggle').textContent = 'شروع تایمر'; };
-$('#new-goal').onclick = () => { $('#goal-form').hidden = !$('#goal-form').hidden; }; $('#goal-progress').oninput = (event) => { $('#goal-progress-text').textContent = `${formatFa(event.target.value)}٪`; }; $('#goal-form').onsubmit = saveGoal;
-$$('.review-kind').forEach((button) => button.onclick = () => { reviewKind = button.dataset.kind; $$('.review-kind').forEach((item) => item.classList.toggle('active', item === button)); loadReview(); }); $('#save-review').onclick = saveReview;
-$('#login').onclick = async () => { const email = $('#email').value.trim(); if (!email) return setStatus('#auth-status', 'لطفاً ایمیل‌تان را وارد کنید.'); const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } }); setStatus('#auth-status', error?.message || 'لینک ورود ارسال شد.'); };
-$('#logout').onclick = () => sb.auth.signOut();
-renderTimer();
+$$('.tab').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); }); ['score', 'mood', 'stress', 'focus'].forEach((name) => { $(`#${name}`).oninput = updateMetricLabels; });
+$('#previous-day').onclick = () => { const date = parseIso($('#date').value); date.setDate(date.getDate() - 1); $('#date').value = isoDate(date); loadDay(); }; $('#next-day').onclick = () => { const date = parseIso($('#date').value); date.setDate(date.getDate() + 1); $('#date').value = isoDate(date); loadDay(); }; $('#date').onchange = loadDay; $('#add-event').onclick = () => addEvent(); $('#save-day').onclick = saveDay;
+$('#timer-toggle').onclick = toggleTimer; $('#timer-reset').onclick = () => { clearInterval(timerId); timerId = null; seconds = 300; renderTimer(); $('#timer-toggle').textContent = 'شروع تایمر'; }; $('#new-prompt').onclick = () => { promptIndex = (promptIndex + 1) % prompts.length; renderPrompt(); };
+$('#new-goal').onclick = () => { $('#goal-form').hidden = !$('#goal-form').hidden; }; $('#goal-progress').oninput = (e) => { $('#goal-progress-text').textContent = `${formatFa(e.target.value)}٪`; }; $('#action-progress').oninput = (e) => { $('#action-progress-text').textContent = `${formatFa(e.target.value)}٪`; }; $('#goal-form').onsubmit = saveGoal;
+$$('.review-kind').forEach((b) => { b.onclick = () => { reviewKind = b.dataset.kind; $$('.review-kind').forEach((x) => x.classList.toggle('active', x === b)); loadReview(); }; }); $('#save-review').onclick = saveReview; $('#calendar-prev').onclick = () => { calendarCursor.setDate(calendarCursor.getDate() - 35); renderCalendar(); }; $('#calendar-next').onclick = () => { calendarCursor.setDate(calendarCursor.getDate() + 35); renderCalendar(); }; $('#archive-search').oninput = renderArchive; $('#archive-score').onchange = renderArchive;
+$('#login').onclick = async () => { const email = $('#email').value.trim(); if (!email) return setStatus('#auth-status', 'لطفاً ایمیل‌تان را وارد کنید.'); const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } }); setStatus('#auth-status', error?.message || 'لینک ورود ارسال شد.'); }; $('#logout').onclick = () => sb.auth.signOut(); renderTimer(); renderPrompt();
 sb.auth.onAuthStateChange(async (_event, session) => { const signedIn = Boolean(session?.user); $('#auth').hidden = signedIn; $('#app').hidden = !signedIn; $('#logout').hidden = !signedIn; if (signedIn) { cleanAuthUrl(); await loadEntries(); await loadDay(); await loadGoals(); } });
