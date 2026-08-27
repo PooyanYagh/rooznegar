@@ -1,1 +1,105 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>روزنگار</title><link rel="stylesheet" href="style.css"></head><body><main><header><h1>روزنگار</h1><button id="logout" hidden>خروج</button></header><section id="auth"><h2>ژورنال خصوصی شما</h2><p>با لینک ورود، یادداشت‌هایتان امن و بین دستگاه‌ها همگام می‌شوند.</p><input id="email" type="email" placeholder="ایمیل"><button id="login">ارسال لینک ورود</button></section><section id="app" hidden><div class="bar"><input id="date" type="date"><input id="score" type="range" min="1" max="10" value="5"><b id="scoreText">۵/۱۰</b></div><textarea id="highlight" placeholder="هایلایت امروز چیست؟"></textarea><h3>اتفاق‌های روز</h3><div id="events"></div><button id="add">+ اتفاق</button><textarea id="thoughts" placeholder="فکرها"></textarea><textarea id="dump" placeholder="Brain Dump — هر چه در ذهنت هست"></textarea><textarea id="lesson" placeholder="درس یا تنظیم بعدی"></textarea><button id="save">ذخیرهٔ امن</button><p id="status"></p><h3>روزهای گذشته</h3><div id="history"></div></section></main><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>روزنگار</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div><h1>روزنگار</h1><p id="today-label"></p></div>
+      <button id="logout" class="quiet" hidden>خروج</button>
+    </header>
+
+    <section id="auth" class="auth-card">
+      <h2>ژورنال خصوصی شما</h2>
+      <p>با یک لینک امن وارد شوید و یادداشت‌هایتان را بین دستگاه‌ها همگام نگه دارید.</p>
+      <input id="email" type="email" autocomplete="email" placeholder="ایمیل شما">
+      <button id="login">ارسال لینک ورود</button>
+      <p id="auth-status" class="status"></p>
+    </section>
+
+    <section id="app" hidden>
+      <nav class="tabs" aria-label="بخش‌های روزنگار">
+        <button class="tab active" data-tab="day">امروز</button>
+        <button class="tab" data-tab="calendar">تقویم</button>
+        <button class="tab" data-tab="goals">هدف‌ها</button>
+        <button class="tab" data-tab="insights">روندها</button>
+        <button class="tab" data-tab="reviews">مرور</button>
+      </nav>
+
+      <section class="panel active" id="day">
+        <div class="date-bar">
+          <button id="previous-day" class="icon" aria-label="روز قبل">‹</button>
+          <div><strong id="jalali-date"></strong><input id="date" type="date" aria-label="تاریخ میلادی"></div>
+          <button id="next-day" class="icon" aria-label="روز بعد">›</button>
+        </div>
+        <div class="metric-grid">
+          <label>امتیاز روز <output id="scoreText">۵/۱۰</output><input id="score" type="range" min="1" max="10" value="5"></label>
+          <label>حال <output id="moodText">۵/۱۰</output><input id="mood" type="range" min="1" max="10" value="5"></label>
+          <label>استرس <output id="stressText">۵/۱۰</output><input id="stress" type="range" min="1" max="10" value="5"></label>
+          <label>تمرکز <output id="focusText">۵/۱۰</output><input id="focus" type="range" min="1" max="10" value="5"></label>
+        </div>
+        <label class="field"><span>خواب (ساعت)</span><input id="sleep" type="number" min="0" max="24" step="0.25" placeholder="مثلاً ۷.۵"></label>
+        <label class="field"><span>هایلایت روز</span><textarea id="highlight" placeholder="امروز چه چیزی مهم بود؟"></textarea></label>
+
+        <div class="section-head"><h2>خط زندگی امروز</h2><button id="add-event" class="quiet">+ اتفاق</button></div>
+        <p class="hint">هر اتفاق می‌تواند فکر، احساس و تأمل خودش را داشته باشد.</p>
+        <div id="events"></div>
+
+        <div class="brain-card">
+          <div class="section-head"><h2>Brain Dump</h2><span id="timer">۰۵:۰۰</span></div>
+          <p class="hint">بدون تحلیل بنویسید؛ بعداً می‌توانید ویرایشش کنید.</p>
+          <textarea id="dump" placeholder="هرچه در ذهنتان هست…"></textarea>
+          <div class="inline-actions"><button id="timer-toggle" class="quiet">شروع تایمر</button><button id="timer-reset" class="quiet">بازنشانی</button></div>
+        </div>
+        <label class="field"><span>تأمل کلی / درس یا تنظیم بعدی</span><textarea id="lesson" placeholder="چه چیزی می‌خواهم با خودم ببرم؟"></textarea></label>
+        <button id="save-day" class="primary">ذخیرهٔ روز</button><p id="day-status" class="status"></p>
+      </section>
+
+      <section class="panel" id="calendar">
+        <h2>تقویم و روزهای گذشته</h2>
+        <p class="hint">نمایش تاریخ‌ها شمسی است؛ برای باز کردن هر روز، روی آن بزنید.</p>
+        <div id="calendar-list" class="history"></div>
+      </section>
+
+      <section class="panel" id="goals">
+        <div class="section-head"><h2>هدف‌ها</h2><button id="new-goal" class="quiet">+ هدف تازه</button></div>
+        <form id="goal-form" class="form-card" hidden>
+          <input id="goal-title" required placeholder="می‌خواهم به چه برسم؟">
+          <textarea id="goal-why" placeholder="چرا برایم مهم است؟"></textarea>
+          <label class="field"><span>موعد</span><input id="goal-due" type="date"></label>
+          <label class="field"><span>پیشرفت <output id="goal-progress-text">۰٪</output></span><input id="goal-progress" type="range" min="0" max="100" value="0"></label>
+          <button>ذخیرهٔ هدف</button>
+        </form>
+        <div id="goals-list"></div>
+      </section>
+
+      <section class="panel" id="insights">
+        <h2>روندهای واقعی</h2>
+        <p class="hint">این نمودارها از روزهایی ساخته می‌شوند که ثبت کرده‌اید.</p>
+        <div id="charts" class="charts"></div>
+        <div id="insight-empty" class="empty">برای دیدن روندها، چند روز را ثبت کنید.</div>
+      </section>
+
+      <section class="panel" id="reviews">
+        <h2>مرور ماهانه و سالانه</h2>
+        <div class="review-switch"><button class="review-kind active" data-kind="monthly">ماهانه</button><button class="review-kind" data-kind="yearly">سالانه</button></div>
+        <div id="review-summary" class="review-summary"></div>
+        <label class="field"><span>چه چیزی را حفظ می‌کنم؟</span><textarea id="review-keep"></textarea></label>
+        <label class="field"><span>چه چیزی را تنظیم می‌کنم؟</span><textarea id="review-adjust"></textarea></label>
+        <button id="save-review">ذخیرهٔ مرور</button><p id="review-status" class="status"></p>
+      </section>
+    </section>
+  </main>
+  <template id="event-template">
+    <article class="event-card">
+      <div class="event-top"><input class="event-time" type="time"><input class="event-title" placeholder="چه اتفاقی افتاد؟"><button class="remove-event" aria-label="حذف">×</button></div>
+      <details><summary>فکر، احساس و تأمل این اتفاق</summary><textarea class="event-thought" placeholder="چه فکری از ذهنتان گذشت؟"></textarea><input class="event-emotions" placeholder="احساس‌ها، با ویرگول جدا کنید"><textarea class="event-reflection" placeholder="تأمل یا معنای این اتفاق"></textarea></details>
+    </article>
+  </template>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
